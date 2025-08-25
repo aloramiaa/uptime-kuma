@@ -1,7 +1,6 @@
-# ---- Base Image ----
+# ---- Build Stage ----
 FROM node:18-alpine AS build
 
-# Set working dir
 WORKDIR /app
 
 # Install system deps
@@ -14,25 +13,28 @@ RUN apk add --no-cache \
   tzdata \
   sqlite
 
-# Copy files
-COPY . .
+# Copy package files first (for caching)
+COPY package*.json ./
 
-# Install deps (ignore peer dependency conflicts)
-RUN npm ci --omit=dev --legacy-peer-deps
+# Install ALL deps (including dev) for build
+RUN npm install --legacy-peer-deps
+
+# Copy rest of source
+COPY . .
 
 # Build frontend
 RUN npm run build
 
-# ---- Runtime Image ----
+# ---- Runtime Stage ----
 FROM node:18-alpine
 
 WORKDIR /app
 
 RUN apk add --no-cache tzdata sqlite bash
 
+# Copy only built files + required runtime packages
 COPY --from=build /app /app
 
-# Default Kuma port
 EXPOSE 3001
 
 CMD ["node", "server/server.js"]
