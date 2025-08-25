@@ -1,21 +1,38 @@
-# Base image with Node.js
-FROM node:18-alpine
+# ---- Base Image ----
+FROM node:18-alpine AS build
 
-# Set work directory
+# Set working dir
 WORKDIR /app
 
-# Install deps first
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Install system deps
+RUN apk add --no-cache \
+  git \
+  python3 \
+  make \
+  g++ \
+  bash \
+  tzdata \
+  sqlite
 
-# Copy rest of the code
+# Copy files
 COPY . .
 
-# Build frontend (creates dist/)
+# Install deps (ignore peer dependency conflicts)
+RUN npm ci --omit=dev --legacy-peer-deps
+
+# Build frontend
 RUN npm run build
 
-# Expose Uptime Kuma default port
+# ---- Runtime Image ----
+FROM node:18-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache tzdata sqlite bash
+
+COPY --from=build /app /app
+
+# Default Kuma port
 EXPOSE 3001
 
-# Start app
 CMD ["node", "server/server.js"]
